@@ -37,6 +37,8 @@ namespace COMPILADOR.Analizadores
                     return InterpretarPara(nodo);
                 case "BLOQUE":
                     return InterpretarBloque(nodo);
+                case "si":
+                    return InterpretarSi(nodo);
                 default:
                     throw new Exception($"Tipo de nodo no soportado: {nodo.Tipo}");
             }
@@ -192,5 +194,40 @@ namespace COMPILADOR.Analizadores
             }
             return resultado;
         }
+
+        private object? InterpretarSi(Nodo nodo)
+        {
+            var condicion = Interpretar(nodo.Hijos[0]);
+            
+            bool condicionCumplida = false;
+            
+            if (condicion is int intValue)
+            {
+                condicionCumplida = intValue != 0;
+            }
+            else if (condicion is float floatValue)
+            {
+                condicionCumplida = floatValue != 0;
+            }
+            else if (condicion is bool boolValue)
+            {
+                condicionCumplida = boolValue;
+            }
+            else if (condicion != null)
+            {
+                condicionCumplida = true;
+            }
+            
+            if (condicionCumplida)
+            {
+                return Interpretar(nodo.Hijos[1]);
+            }
+            else if (nodo.Hijos.Count > 2)
+            {
+                return Interpretar(nodo.Hijos[2]);
+            }
+            
+            return null;
+        }
     }
-} 
+}
