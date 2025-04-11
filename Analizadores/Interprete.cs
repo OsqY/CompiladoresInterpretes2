@@ -13,7 +13,7 @@ namespace COMPILADOR.Analizadores
             tablaSimbolos = new TablaSimbolos();
         }
 
-        public object Interpretar(Nodo nodo)
+        public object? Interpretar(Nodo nodo)
         {
             switch (nodo.Tipo)
             {
@@ -25,10 +25,16 @@ namespace COMPILADOR.Analizadores
                     return InterpretarExpresionAritmetica(nodo);
                 case "NUMERO":
                     return int.Parse(nodo.Valor);
+                case "FLOTANTE":
+                    return float.Parse(nodo.Valor);
+                case "CADENA":
+                    return nodo.Valor;
                 case "IDENTIFICADOR":
                     return tablaSimbolos.ObtenerValor(nodo.Valor);
                 case "MIENTRAS":
                     return InterpretarMientras(nodo);
+                case "PARA":
+                    return InterpretarPara(nodo);
                 case "BLOQUE":
                     return InterpretarBloque(nodo);
                 default:
@@ -36,9 +42,9 @@ namespace COMPILADOR.Analizadores
             }
         }
 
-        private object InterpretarPrograma(Nodo nodo)
+        private object? InterpretarPrograma(Nodo nodo)
         {
-            object resultado = null;
+            object? resultado = null;
             foreach (var hijo in nodo.Hijos)
             {
                 resultado = Interpretar(hijo);
@@ -46,24 +52,27 @@ namespace COMPILADOR.Analizadores
             return resultado;
         }
 
-        private object InterpretarExpresion(Nodo nodo)
+        private object? InterpretarExpresion(Nodo nodo)
         {
             // Si es una asignación
             if (nodo.Hijos.Count == 3 && nodo.Hijos[1].Valor == "=")
             {
                 string nombreVariable = nodo.Hijos[0].Valor;
-                object valorExpresion = Interpretar(nodo.Hijos[2]);
+                object? valorExpresion = Interpretar(nodo.Hijos[2]);
 
-                if (tablaSimbolos.EstaDefinida(nombreVariable))
+                if (valorExpresion != null)
                 {
-                    tablaSimbolos.ActualizarValor(nombreVariable, valorExpresion);
-                }
-                else
-                {
-                    tablaSimbolos.Definir(nombreVariable, valorExpresion);
-                }
+                    if (tablaSimbolos.EstaDefinida(nombreVariable))
+                    {
+                        tablaSimbolos.ActualizarValor(nombreVariable, valorExpresion);
+                    }
+                    else
+                    {
+                        tablaSimbolos.Definir(nombreVariable, valorExpresion);
+                    }
 
-                Console.WriteLine($"{nombreVariable} = {valorExpresion}");
+                    Console.WriteLine($"{nombreVariable} = {valorExpresion}");
+                }
                 return valorExpresion;
             }
 
@@ -71,7 +80,7 @@ namespace COMPILADOR.Analizadores
             return Interpretar(nodo.Hijos[0]);
         }
 
-        private object InterpretarExpresionAritmetica(Nodo nodo)
+        private object? InterpretarExpresionAritmetica(Nodo nodo)
         {
             if (nodo.Hijos.Count == 1)
             {
@@ -79,72 +88,109 @@ namespace COMPILADOR.Analizadores
             }
 
             var resultado = Interpretar(nodo.Hijos[0]);
+            if (resultado == null) return null;
             
             for (int i = 1; i < nodo.Hijos.Count; i += 2)
             {
                 var operador = nodo.Hijos[i].Valor;
                 var valorDerecho = Interpretar(nodo.Hijos[i + 1]);
+                if (valorDerecho == null) return null;
+                
                 resultado = AplicarOperador(operador, resultado, valorDerecho);
             }
 
             return resultado;
         }
 
-        private object AplicarOperador(string operador, object izquierdo, object derecho)
+        private object? AplicarOperador(string operador, object izquierdo, object derecho)
         {
-            int izq = Convert.ToInt32(izquierdo);
-            int der = Convert.ToInt32(derecho);
-
-            switch (operador)
+            // Si ambos son cadenas
+            if (izquierdo is string izqStr && derecho is string derStr)
             {
-                case "+":
-                    return izq + der;
-                case "-":
-                    return izq - der;
-                case "*":
-                    return izq * der;
-                case "/":
-                    if (der == 0) throw new Exception("División por cero");
-                    return izq / der;
-                case "%":
-                    if (der == 0) throw new Exception("Módulo por cero");
-                    return izq % der;
-                case ">":
-                    return izq > der ? 1 : 0;
-                case "<":
-                    return izq < der ? 1 : 0;
-                case ">=":
-                    return izq >= der ? 1 : 0;
-                case "<=":
-                    return izq <= der ? 1 : 0;
-                case "==":
-                    return izq == der ? 1 : 0;
-                case "!=":
-                    return izq != der ? 1 : 0;
-                default:
-                    throw new Exception($"Operador no soportado: {operador}");
+                switch (operador)
+                {
+                    case "+": return izqStr + derStr;
+                    case "==": return izqStr == derStr ? 1 : 0;
+                    case "!=": return izqStr != derStr ? 1 : 0;
+                }
             }
+            // Si al menos uno es cadena, convertir ambos a cadena y concatenar
+            else if (izquierdo is string || derecho is string)
+            {
+                if (operador == "+")
+                {
+                    return izquierdo.ToString() + derecho.ToString();
+                }
+            }
+            // Si ambos son números
+            else if (izquierdo is int izqInt && derecho is int derInt)
+            {
+                switch (operador)
+                {
+                    case "+": return izqInt + derInt;
+                    case "-": return izqInt - derInt;
+                    case "*": return izqInt * derInt;
+                    case "/": return izqInt / derInt;
+                    case "%": return izqInt % derInt;
+                    case ">": return izqInt > derInt ? 1 : 0;
+                    case "<": return izqInt < derInt ? 1 : 0;
+                    case ">=": return izqInt >= derInt ? 1 : 0;
+                    case "<=": return izqInt <= derInt ? 1 : 0;
+                    case "==": return izqInt == derInt ? 1 : 0;
+                    case "!=": return izqInt != derInt ? 1 : 0;
+                }
+            }
+            // Si al menos uno es flotante
+            else if (izquierdo is float izqFloat || derecho is float derFloat)
+            {
+                float izq = Convert.ToSingle(izquierdo);
+                float der = Convert.ToSingle(derecho);
+                switch (operador)
+                {
+                    case "+": return izq + der;
+                    case "-": return izq - der;
+                    case "*": return izq * der;
+                    case "/": return izq / der;
+                    case ">": return izq > der ? 1 : 0;
+                    case "<": return izq < der ? 1 : 0;
+                    case ">=": return izq >= der ? 1 : 0;
+                    case "<=": return izq <= der ? 1 : 0;
+                    case "==": return izq == der ? 1 : 0;
+                    case "!=": return izq != der ? 1 : 0;
+                }
+            }
+
+            throw new Exception($"Operación no soportada entre {izquierdo.GetType()} y {derecho.GetType()}");
         }
 
-        private object InterpretarBloque(Nodo nodo)
+        private object? InterpretarMientras(Nodo nodo)
         {
-            object resultado = null;
-            foreach (var hijo in nodo.Hijos)
-            {
-                resultado = Interpretar(hijo);
-            }
-            return resultado;
-        }
-
-        private object InterpretarMientras(Nodo nodo)
-        {
-            // nodo.Hijos[0] es la condición
-            // nodo.Hijos[1] es el bloque
             while (Convert.ToInt32(Interpretar(nodo.Hijos[0])) > 0)
             {
                 Interpretar(nodo.Hijos[1]);
             }
             return null;
+        }
+
+        private object? InterpretarPara(Nodo nodo)
+        {
+            Interpretar(nodo.Hijos[0]); // Inicialización
+            while (Convert.ToInt32(Interpretar(nodo.Hijos[1])) > 0) // Condición
+            {
+                Interpretar(nodo.Hijos[3]); // Bloque
+                Interpretar(nodo.Hijos[2]); // Incremento
+            }
+            return null;
+        }
+
+        private object? InterpretarBloque(Nodo nodo)
+        {
+            object? resultado = null;
+            foreach (var hijo in nodo.Hijos)
+            {
+                resultado = Interpretar(hijo);
+            }
+            return resultado;
         }
     }
 } 

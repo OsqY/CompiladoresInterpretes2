@@ -11,11 +11,7 @@ namespace COMPILADOR.Analizadores
         private int posicion;
         private int linea;
         private int columna;
-
-        private static readonly HashSet<string> palabrasReservadas = new HashSet<string>
-        {
-            "si", "sino", "mientras"
-        };
+        private HashSet<string> palabrasReservadas;
 
         private static readonly HashSet<string> operadores = new HashSet<string>
         {
@@ -28,18 +24,66 @@ namespace COMPILADOR.Analizadores
             this.posicion = 0;
             this.linea = 1;
             this.columna = 1;
+            this.palabrasReservadas = new HashSet<string> { "si", "sino", "mientras", "para", "TATIANA", "OSCAR" };
         }
 
         public List<Token> Analizar()
         {
-            var tokens = new List<Token>();
-            while (posicion < codigo.Length)
+            List<Token> tokens = new List<Token>();
+            Token token;
+
+            while ((token = SiguienteToken()) != null)
             {
-                char caracter = codigo[posicion];
-                
-                if (char.IsWhiteSpace(caracter))
+                tokens.Add(token);
+            }
+
+            return tokens;
+        }
+
+        private Token SiguienteToken()
+        {
+            // Ignorar espacios en blanco
+            while (posicion < codigo.Length && char.IsWhiteSpace(codigo[posicion]))
+            {
+                if (codigo[posicion] == '\n')
                 {
-                    if (caracter == '\n')
+                    linea++;
+                    columna = 1;
+                }
+                else
+                {
+                    columna++;
+                }
+                posicion++;
+            }
+
+            if (posicion >= codigo.Length)
+            {
+                return null;
+            }
+
+            char caracter = codigo[posicion];
+
+            // Comentarios de una línea
+            if (caracter == 'T' && posicion + 6 < codigo.Length && codigo.Substring(posicion, 7) == "TATIANA")
+            {
+                posicion += 7;
+                columna += 7;
+                while (posicion < codigo.Length && codigo[posicion] != '\n')
+                {
+                    posicion++;
+                }
+                return SiguienteToken();
+            }
+
+            // Comentarios de múltiples líneas
+            if (caracter == 'O' && posicion + 4 < codigo.Length && codigo.Substring(posicion, 5) == "OSCAR")
+            {
+                posicion += 5;
+                columna += 5;
+                while (posicion < codigo.Length && !(codigo[posicion] == 'O' && posicion + 4 < codigo.Length && codigo.Substring(posicion, 5) == "OSCAR"))
+                {
+                    if (codigo[posicion] == '\n')
                     {
                         linea++;
                         columna = 1;
@@ -49,69 +93,137 @@ namespace COMPILADOR.Analizadores
                         columna++;
                     }
                     posicion++;
-                    continue;
                 }
-
-                if (caracter == '{' || caracter == '}' || caracter == '(' || caracter == ')')
+                if (posicion < codigo.Length)
                 {
-                    tokens.Add(new Token("SIMBOLO", caracter.ToString(), linea, columna));
+                    posicion += 5;
+                    columna += 5;
+                }
+                return SiguienteToken();
+            }
+
+            // Números
+            if (char.IsDigit(codigo[posicion]))
+            {
+                return LeerNumero();
+            }
+
+            // Identificadores y palabras reservadas
+            if (char.IsLetter(codigo[posicion]) || codigo[posicion] == '_')
+            {
+                return LeerIdentificador();
+            }
+
+            // Cadenas
+            if (codigo[posicion] == '"')
+            {
+                return LeerCadena();
+            }
+
+            // Operadores y símbolos
+            switch (caracter)
+            {
+                case '+':
+                case '-':
+                case '*':
+                case '/':
+                case '%':
+                case '=':
+                case '>':
+                case '<':
+                case '!':
+                case ';':
+                case '{':
+                case '}':
+                case '(':
+                case ')':
                     posicion++;
                     columna++;
-                    continue;
-                }
-
-                if (char.IsDigit(caracter))
-                {
-                    tokens.Add(LeerNumero());
-                }
-                else if (char.IsLetter(caracter))
-                {
-                    tokens.Add(LeerIdentificador());
-                }
-                else if (EsOperador(caracter))
-                {
-                    tokens.Add(LeerOperador());
-                }
-                else
-                {
-                    throw new Exception($"Carácter no reconocido '{caracter}' en línea {linea}, columna {columna}");
-                }
+                    return new Token("OPERADOR", caracter.ToString(), linea, columna - 1);
             }
-            return tokens;
+
+            throw new Exception($"Carácter no reconocido '{caracter}' en línea {linea}, columna {columna}");
         }
 
         private Token LeerNumero()
         {
-            var numero = new StringBuilder();
-            int inicioColumna = columna;
-            
-            while (posicion < codigo.Length && char.IsDigit(codigo[posicion]))
+            int inicio = posicion;
+            bool tienePunto = false;
+
+            while (posicion < codigo.Length && (char.IsDigit(codigo[posicion]) || codigo[posicion] == '.'))
             {
-                numero.Append(codigo[posicion]);
+                if (codigo[posicion] == '.')
+                {
+                    if (tienePunto)
+                    {
+                        throw new Exception($"Número inválido en línea {linea}, columna {columna}");
+                    }
+                    tienePunto = true;
+                }
                 posicion++;
                 columna++;
             }
-            return new Token("NUMERO", numero.ToString(), linea, inicioColumna);
+
+            string valor = codigo.Substring(inicio, posicion - inicio);
+            return new Token(tienePunto ? "FLOTANTE" : "NUMERO", valor, linea, columna - valor.Length);
         }
 
         private Token LeerIdentificador()
         {
-            var identificador = new StringBuilder();
-            int inicioColumna = columna;
-            
-            while (posicion < codigo.Length && char.IsLetterOrDigit(codigo[posicion]))
+            int inicio = posicion;
+            while (posicion < codigo.Length && (char.IsLetterOrDigit(codigo[posicion]) || codigo[posicion] == '_'))
             {
-                identificador.Append(codigo[posicion]);
                 posicion++;
                 columna++;
             }
 
-            string valor = identificador.ToString();
-            if (palabrasReservadas.Contains(valor))
+            string valor = codigo.Substring(inicio, posicion - inicio);
+            string tipo = palabrasReservadas.Contains(valor) ? "PALABRA_RESERVADA" : "IDENTIFICADOR";
+            return new Token(tipo, valor, linea, columna - valor.Length);
+        }
+
+        private Token LeerCadena()
+        {
+            StringBuilder valor = new StringBuilder();
+            posicion++; // Saltar la comilla inicial
+            columna++;
+            int inicioColumna = columna;
+
+            while (posicion < codigo.Length && codigo[posicion] != '"')
             {
-                return new Token("PALABRA_RESERVADA", valor, linea, inicioColumna);
+                if (codigo[posicion] == '\\')
+                {
+                    posicion++;
+                    columna++;
+                    if (posicion >= codigo.Length)
+                    {
+                        throw new Exception($"Cadena no terminada en línea {linea}, columna {columna}");
+                    }
+                    switch (codigo[posicion])
+                    {
+                        case 'n': valor.Append('\n'); break;
+                        case 't': valor.Append('\t'); break;
+                        case '\\': valor.Append('\\'); break;
+                        case '"': valor.Append('"'); break;
+                        default: valor.Append(codigo[posicion]); break;
+                    }
+                }
+                else
+                {
+                    valor.Append(codigo[posicion]);
+                }
+                posicion++;
+                columna++;
             }
-            return new Token("IDENTIFICADOR", valor, linea, inicioColumna);
+
+            if (posicion >= codigo.Length)
+            {
+                throw new Exception($"Cadena no terminada en línea {linea}, columna {columna}");
+            }
+
+            posicion++; // Saltar la comilla final
+            columna++;
+            return new Token("CADENA", valor.ToString(), linea, inicioColumna - 1);
         }
 
         private Token LeerOperador()
@@ -119,28 +231,24 @@ namespace COMPILADOR.Analizadores
             var operador = new StringBuilder();
             int inicioColumna = columna;
             
-            operador.Append(codigo[posicion]);
-            posicion++;
-            columna++;
-            
-            if (posicion < codigo.Length)
+            while (posicion < codigo.Length && EsOperador(codigo[posicion]))
             {
-                string posibleOperador = operador.ToString() + codigo[posicion];
-                if (operadores.Contains(posibleOperador))
+                operador.Append(codigo[posicion]);
+                posicion++;
+                columna++;
+                
+                if (posicion < codigo.Length)
                 {
-                    operador.Append(codigo[posicion]);
-                    posicion++;
-                    columna++;
+                    string posibleOperador = operador.ToString() + codigo[posicion];
+                    if (operadores.Contains(posibleOperador))
+                    {
+                        operador.Append(codigo[posicion]);
+                        posicion++;
+                        columna++;
+                    }
                 }
             }
-            
-            string operadorFinal = operador.ToString();
-            if (!operadores.Contains(operadorFinal))
-            {
-                throw new Exception($"Operador no válido '{operadorFinal}' en línea {linea}, columna {inicioColumna}");
-            }
-            
-            return new Token("OPERADOR", operadorFinal, linea, inicioColumna);
+            return new Token("OPERADOR", operador.ToString(), linea, inicioColumna);
         }
 
         private bool EsOperador(char c)

@@ -46,6 +46,8 @@ namespace COMPILADOR.Analizadores
                         return CrearNodoSi();
                     case "mientras":
                         return CrearNodoMientras();
+                    case "para":
+                        return CrearNodoPara();
                     default:
                         throw new Exception($"Palabra reservada no esperada '{token.Valor}' en línea {token.Linea}, columna {token.Columna}");
                 }
@@ -78,6 +80,37 @@ namespace COMPILADOR.Analizadores
             ConsumirToken(")");
             nodoMientras.AgregarHijo(CrearNodoBloque());
             return nodoMientras;
+        }
+
+        private Nodo CrearNodoPara()
+        {
+            var nodoPara = new Nodo("PARA", "para", tokens[posicion++]);
+            ConsumirToken("(");
+            
+            // Inicialización
+            nodoPara.AgregarHijo(CrearNodoExpresion());
+            if (tokens[posicion].Valor != ";")
+            {
+                throw new Exception($"Se esperaba ';' en línea {tokens[posicion].Linea}, columna {tokens[posicion].Columna}");
+            }
+            posicion++;
+            
+            // Condición
+            nodoPara.AgregarHijo(CrearNodoExpresion());
+            if (tokens[posicion].Valor != ";")
+            {
+                throw new Exception($"Se esperaba ';' en línea {tokens[posicion].Linea}, columna {tokens[posicion].Columna}");
+            }
+            posicion++;
+            
+            // Incremento
+            nodoPara.AgregarHijo(CrearNodoExpresion());
+            ConsumirToken(")");
+            
+            // Bloque
+            nodoPara.AgregarHijo(CrearNodoBloque());
+            
+            return nodoPara;
         }
 
         private Nodo CrearNodoBloque()
@@ -132,6 +165,8 @@ namespace COMPILADOR.Analizadores
             switch (token.Tipo)
             {
                 case "NUMERO":
+                case "FLOTANTE":
+                case "CADENA":
                 case "IDENTIFICADOR":
                     return new Nodo(token.Tipo, token.Valor, token);
                 default:
