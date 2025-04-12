@@ -63,27 +63,118 @@ namespace COMPILADOR.Analizadores
 
         private Nodo CrearNodoExpresionAritmetica()
         {
+            return CrearNodoExpresionLogica();
+        }
+
+        private Nodo CrearNodoExpresionLogica()
+        {
+            // Llamamos a la expresión relacional (>, <, ==, !=, etc.)
+            var nodo = CrearNodoExpresionRelacional();
+            
+            // Procesamos operadores lógicos &&, ||
+            while (posicion < tokens.Count && 
+                  (tokens[posicion].Valor == "&&" || tokens[posicion].Valor == "||"))
+            {
+                string operador = tokens[posicion].Valor;
+                Token operadorToken = tokens[posicion];
+                posicion++; // Consumir el operador
+                
+                // Obtenemos el lado derecho (otra expresión relacional)
+                var derecho = CrearNodoExpresionRelacional();
+                
+                // Creamos un nuevo nodo para la expresión lógica
+                var nuevoNodo = new Nodo("EXPRESION_LOGICA", "");
+                nuevoNodo.AgregarHijo(nodo);
+                nuevoNodo.AgregarHijo(new Nodo("OPERADOR", operador, operadorToken));
+                nuevoNodo.AgregarHijo(derecho);
+                
+                nodo = nuevoNodo;
+            }
+            
+            return nodo;
+        }
+
+        private Nodo CrearNodoExpresionRelacional()
+        {
+            // Llamamos a la expresión aritmética tradicional
+            var nodo = CrearNodoExpresionAritmeticaBase();
+            
+            while (posicion < tokens.Count && 
+                  (tokens[posicion].Valor == "==" || tokens[posicion].Valor == "!=" ||
+                   tokens[posicion].Valor == "<" || tokens[posicion].Valor == ">" ||
+                   tokens[posicion].Valor == "<=" || tokens[posicion].Valor == ">="))
+            {
+                string operador = tokens[posicion].Valor;
+                Token operadorToken = tokens[posicion];
+                posicion++; 
+                
+                // Obtenemos el lado derecho (otra expresión aritmética)
+                var derecho = CrearNodoExpresionAritmeticaBase();
+                
+                // Creamos un nuevo nodo para la expresión relacional
+                var nuevoNodo = new Nodo("EXPRESION_RELACIONAL", "");
+                nuevoNodo.AgregarHijo(nodo);
+                nuevoNodo.AgregarHijo(new Nodo("OPERADOR", operador, operadorToken));
+                nuevoNodo.AgregarHijo(derecho);
+                
+                nodo = nuevoNodo;
+            }
+            
+            return nodo;
+        }
+
+        private Nodo CrearNodoExpresionAritmeticaBase()
+        {
             var nodo = new Nodo("EXPRESION_ARITMETICA", "");
             
             // Manejar paréntesis
             if (tokens[posicion].Valor == "(")
             {
                 posicion++; // Consumir el (
-                nodo.Hijos.Add(CrearNodoExpresionAritmetica());
+                nodo.Hijos.Add(CrearNodoExpresionLogica()); // Ahora llamamos a lógica dentro de paréntesis
                 if (posicion >= tokens.Count || tokens[posicion].Valor != ")")
                 {
                     throw new Exception($"Se esperaba ')' en línea {tokens[posicion - 1].Linea}, columna {tokens[posicion - 1].Columna}");
                 }
                 posicion++; // Consumir el )
             }
+            else if (posicion < tokens.Count && tokens[posicion].Valor == "!")
+            {
+                // Manejar operador de negación
+                var nodoNegacion = new Nodo("NEGACION", "");
+                nodoNegacion.AgregarHijo(new Nodo("OPERADOR", tokens[posicion].Valor, tokens[posicion]));
+                posicion++; // Consumir el operador !
+                
+                // Si hay paréntesis después del !
+                if (tokens[posicion].Valor == "(")
+                {
+                    posicion++; // Consumir el (
+                    nodoNegacion.AgregarHijo(CrearNodoExpresionLogica());
+                    if (posicion >= tokens.Count || tokens[posicion].Valor != ")")
+                    {
+                        throw new Exception($"Se esperaba ')' en línea {tokens[posicion - 1].Linea}, columna {tokens[posicion - 1].Columna}");
+                    }
+                    posicion++; // Consumir el )
+                }
+                else
+                {
+                    nodoNegacion.AgregarHijo(CrearNodoTermino());
+                }
+                
+                nodo.Hijos.Add(nodoNegacion);
+            }
             else
             {
                 nodo.Hijos.Add(CrearNodoTermino());
             }
 
-            // Manejar operadores con precedencia
-            while (posicion < tokens.Count && EsOperador(tokens[posicion].Valor) && tokens[posicion].Valor != ")")
+            // Manejar operadores con precedencia (+, -, *, /, %)
+            while (posicion < tokens.Count && 
+                  (tokens[posicion].Valor == "+" || tokens[posicion].Valor == "-" || 
+                   tokens[posicion].Valor == "*" || tokens[posicion].Valor == "/" || 
+                   tokens[posicion].Valor == "%") && tokens[posicion].Valor != ")")
             {
+                // El resto del código para manejar operadores aritméticos queda igual
                 var operador = tokens[posicion].Valor;
                 var precedencia = ObtenerPrecedencia(operador);
                 
@@ -91,32 +182,32 @@ namespace COMPILADOR.Analizadores
                 if (posicion + 2 < tokens.Count)
                 {
                     var siguienteToken = tokens[posicion + 2];
-                    if (siguienteToken.Tipo == "OPERADOR" && EsOperador(siguienteToken.Valor))
+                    if (siguienteToken.Tipo == "OPERADOR" && 
+                        (siguienteToken.Valor == "+" || 
+                         siguienteToken.Valor == "-" || 
+                         siguienteToken.Valor == "*" || 
+                         siguienteToken.Valor == "/" || 
+                         siguienteToken.Valor == "%"))
                     {
                         var siguienteOperador = siguienteToken.Valor;
                         var siguientePrecedencia = ObtenerPrecedencia(siguienteOperador);
                         
                         if (siguientePrecedencia > precedencia)
                         {
-                            // Guardar el primer operador y su operando izquierdo
+                            // Resto del código para manejar precedencia queda igual
                             var operadorToken = tokens[posicion];
                             posicion++; // Consumir el operador
                             
                             var operandoDerecho = new Nodo("EXPRESION_ARITMETICA", "");
-                            // Añadir el primer término de la operación de mayor precedencia
                             operandoDerecho.Hijos.Add(CrearNodoTermino());
                             
-                            // Añadir el operador de mayor precedencia
                             operandoDerecho.Hijos.Add(new Nodo("OPERADOR", siguienteOperador, siguienteToken));
                             posicion++; // Consumir el operador de mayor precedencia
                             
-                            // Añadir el segundo término de la operación de mayor precedencia
                             operandoDerecho.Hijos.Add(CrearNodoTermino());
                             
-                            // Ahora agregar el operador de menor precedencia al nodo principal
                             nodo.Hijos.Add(new Nodo("OPERADOR", operador, operadorToken));
                             
-                            // Agregar la expresión de mayor precedencia como el operando derecho
                             nodo.Hijos.Add(operandoDerecho);
                             
                             continue;
@@ -124,7 +215,7 @@ namespace COMPILADOR.Analizadores
                     }
                 }
 
-                // Si no hay operadores de mayor precedencia, agregar al nodo actual
+                // Si no hay operadores de mayor precedencia
                 nodo.Hijos.Add(new Nodo("OPERADOR", operador, tokens[posicion]));
                 posicion++;
                 if (posicion < tokens.Count)
@@ -174,7 +265,7 @@ namespace COMPILADOR.Analizadores
                     if (token.Valor == "(")
                     {
                         posicion++;
-                        var nodo = CrearNodoExpresionAritmetica();
+                        var nodo = CrearNodoExpresionLogica();
                         if (posicion >= tokens.Count || tokens[posicion].Valor != ")")
                         {
                             throw new Exception($"Se esperaba ')' en línea {token.Linea}, columna {token.Columna}");

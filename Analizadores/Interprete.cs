@@ -23,6 +23,12 @@ namespace COMPILADOR.Analizadores
                     return InterpretarExpresion(nodo);
                 case "EXPRESION_ARITMETICA":
                     return InterpretarExpresionAritmetica(nodo);
+                case "EXPRESION_RELACIONAL":
+                    return InterpretarExpresionRelacional(nodo);
+                case "EXPRESION_LOGICA":
+                    return InterpretarExpresionLogica(nodo);
+                case "NEGACION":
+                    return InterpretarNegacion(nodo);
                 case "NUMERO":
                     return int.Parse(nodo.Valor);
                 case "FLOTANTE":
@@ -104,8 +110,25 @@ namespace COMPILADOR.Analizadores
             return resultado;
         }
 
-        private object? AplicarOperador(string operador, object izquierdo, object derecho)
+        private object? InterpretarExpresionRelacional(Nodo nodo)
         {
+            if (nodo.Hijos.Count == 3)
+            {
+                object? valorIzquierdo = Interpretar(nodo.Hijos[0]);
+                string operador = nodo.Hijos[1].Valor;
+                object? valorDerecho = Interpretar(nodo.Hijos[2]);
+                
+                return AplicarOperador(operador, valorIzquierdo, valorDerecho);
+            }
+            return null;
+        }
+
+        private object? AplicarOperador(string operador, object? izquierdo, object? derecho)
+        {
+            // Verificar que los valores no sean null
+            if (izquierdo == null || derecho == null)
+                throw new Exception($"No se puede aplicar el operador '{operador}' en valores nulos");
+
             // Si ambos son cadenas
             if (izquierdo is string izqStr && derecho is string derStr)
             {
@@ -165,6 +188,79 @@ namespace COMPILADOR.Analizadores
             throw new Exception($"Operación no soportada entre {izquierdo.GetType()} y {derecho.GetType()}");
         }
 
+        private object? InterpretarExpresionLogica(Nodo nodo)
+        {
+            if (nodo.Hijos.Count == 3)
+            {
+                object? valorIzquierdo = Interpretar(nodo.Hijos[0]);
+                string operador = nodo.Hijos[1].Valor;
+                
+                // Evaluación en cortocircuito para && y ||
+                if (operador == "&&")
+                {
+                    // Si el izquierdo es falso, no necesitamos evaluar el derecho
+                    if (ConvertirABooleano(valorIzquierdo) == false)
+                        return 0; 
+
+                    object? valorDerechoAnd = Interpretar(nodo.Hijos[2]);
+                    return ConvertirABooleano(valorDerechoAnd) ? 1 : 0;
+                }
+                else if (operador == "||")
+                {
+                    // Si el izquierdo es verdadero, no necesitamos evaluar el derecho
+                    if (ConvertirABooleano(valorIzquierdo) == true)
+                        return 1; 
+                        
+                    object? valorDerechoOr = Interpretar(nodo.Hijos[2]);
+                    return ConvertirABooleano(valorDerechoOr) ? 1 : 0;
+                }
+                
+                object? valorDerecho = Interpretar(nodo.Hijos[2]);
+                return AplicarOperadorLogico(operador, valorIzquierdo, valorDerecho);
+            }
+            
+            return null;
+        }
+
+        private object? InterpretarNegacion(Nodo nodo)
+        {
+            if (nodo.Hijos.Count == 2)
+            {
+                object? valor = Interpretar(nodo.Hijos[1]);
+                return ConvertirABooleano(valor) ? 0 : 1;
+            }
+            return null;
+        }
+
+        private bool ConvertirABooleano(object? valor)
+        {
+            if (valor == null) return false;
+            
+            if (valor is int entero)
+                return entero != 0;
+                
+            if (valor is double flotante)
+                return flotante != 0;
+                
+            if (valor is string cadena)
+                return !string.IsNullOrEmpty(cadena);
+                
+            return false;
+        }
+
+        private object? AplicarOperadorLogico(string operador, object? izquierdo, object? derecho)
+        {
+            bool valorIzquierdoBool = ConvertirABooleano(izquierdo);
+            bool valorDerechoBool = ConvertirABooleano(derecho);
+            
+            switch (operador)
+            {
+                case "&&": return valorIzquierdoBool && valorDerechoBool ? 1 : 0;
+                case "||": return valorIzquierdoBool || valorDerechoBool ? 1 : 0;
+                default: return null;
+            }
+        }
+
         private object? InterpretarMientras(Nodo nodo)
         {
             while (Convert.ToInt32(Interpretar(nodo.Hijos[0])) > 0)
@@ -176,11 +272,11 @@ namespace COMPILADOR.Analizadores
 
         private object? InterpretarPara(Nodo nodo)
         {
-            Interpretar(nodo.Hijos[0]); // Inicialización
-            while (Convert.ToInt32(Interpretar(nodo.Hijos[1])) > 0) // Condición
+            Interpretar(nodo.Hijos[0]); 
+            while (Convert.ToInt32(Interpretar(nodo.Hijos[1])) > 0) 
             {
-                Interpretar(nodo.Hijos[3]); // Bloque
-                Interpretar(nodo.Hijos[2]); // Incremento
+                Interpretar(nodo.Hijos[3]); 
+                Interpretar(nodo.Hijos[2]);
             }
             return null;
         }

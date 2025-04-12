@@ -40,7 +40,7 @@ namespace COMPILADOR.Analizadores
             return tokens;
         }
 
-        private Token SiguienteToken()
+        private Token? SiguienteToken()
         {
             // Ignorar espacios en blanco
             while (posicion < codigo.Length && char.IsWhiteSpace(codigo[posicion]))
@@ -121,25 +121,17 @@ namespace COMPILADOR.Analizadores
             }
 
             // Operadores y símbolos
-            switch (caracter)
+            if (EsOperador(caracter))
             {
-                case '+':
-                case '-':
-                case '*':
-                case '/':
-                case '%':
-                case '=':
-                case '>':
-                case '<':
-                case '!':
-                case ';':
-                case '{':
-                case '}':
-                case '(':
-                case ')':
-                    posicion++;
-                    columna++;
-                    return new Token("OPERADOR", caracter.ToString(), linea, columna - 1);
+                return LeerOperador();
+            }
+
+            // Otros símbolos individuales
+            if (caracter == ';' || caracter == '{' || caracter == '}' || caracter == '(' || caracter == ')')
+            {
+                posicion++;
+                columna++;
+                return new Token("OPERADOR", caracter.ToString(), linea, columna - 1);
             }
 
             throw new Exception($"Carácter no reconocido '{caracter}' en línea {linea}, columna {columna}");
@@ -228,27 +220,24 @@ namespace COMPILADOR.Analizadores
 
         private Token LeerOperador()
         {
-            var operador = new StringBuilder();
             int inicioColumna = columna;
             
-            while (posicion < codigo.Length && EsOperador(codigo[posicion]))
+            // Verificar operadores de dos caracteres
+            if (posicion + 1 < codigo.Length)
             {
-                operador.Append(codigo[posicion]);
-                posicion++;
-                columna++;
-                
-                if (posicion < codigo.Length)
+                string posibleOperador = codigo.Substring(posicion, 2);
+                if (operadores.Contains(posibleOperador))
                 {
-                    string posibleOperador = operador.ToString() + codigo[posicion];
-                    if (operadores.Contains(posibleOperador))
-                    {
-                        operador.Append(codigo[posicion]);
-                        posicion++;
-                        columna++;
-                    }
+                    posicion += 2;
+                    columna += 2;
+                    return new Token("OPERADOR", posibleOperador, linea, inicioColumna);
                 }
             }
-            return new Token("OPERADOR", operador.ToString(), linea, inicioColumna);
+            
+            string operador = codigo[posicion].ToString();
+            posicion++;
+            columna++;
+            return new Token("OPERADOR", operador, linea, inicioColumna);
         }
 
         private bool EsOperador(char c)
@@ -256,4 +245,4 @@ namespace COMPILADOR.Analizadores
             return "+-*/%=!<>&|".Contains(c);
         }
     }
-} 
+}
